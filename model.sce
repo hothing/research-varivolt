@@ -19,8 +19,10 @@ Umax = 95 // [V] maximal voltage
 // a = Tp / (Tp + T)
 // b = Ku * T / (Tp + T)
 
+nm = 1350 // [1/min] nominal speed
+
 Tp = 2
-Ku = 1
+Ku = nm / 100
 a2 = Tp / (Tp + T)
 b2 = Ku * T / (Tp + T)
 
@@ -28,10 +30,11 @@ b2 = Ku * T / (Tp + T)
 // the linear position {p} is an intergral from the motor speed {w}
 // p(n+1) = p(n) + kw * w(n + 1)
 
-nm = 1350 // [1/min] nominal speed
+
 Tmr = 120 // [s] a movement time from end to end
 
-kw = ((Pmax - Pmin) / Tmr) / nm
+vx = (Pmax - Pmin) / Tmr // nominal linear speed
+kw = vx / nm // speed translation factor
 a1 = kw * T
 b1 = 0
 
@@ -66,7 +69,7 @@ So = syslin(T, A, B, C, D)
 //K = [22, 2]
 p = [-3 , -1]
 
-pr = -0.01 // -0.1 is good
+pr = -0.9 // -0.1 is good
 pi = 0.0
 p = [-pr + pi*%i, -pr - pi*%i]
 
@@ -74,58 +77,68 @@ K = ppol(A,B, p)
 
 Ac = A - B*K
 spec(Ac)
-Ns = 7328.132  // scaling factor
+Ns = 5.5384616  // scaling factor
 Bc = B * Ns
 
 Sc = syslin(T, Ac, Bc, C, D)
 
-// an observer making
-opr = 100 // 
+// Controller with an observer
+// an observer character
+opr = -0.5 // 
 opi = 0.0 //
 op = [-opr + opi*%i, -opr - opi*%i]
 L = ppol(A', C', op)'
 
-At1 = A - B*K
-At2 = B * K
-At3 = zeros(A)
-At4 = A - L*C
-
-At = [At1, At2; At3, At4];
-
-Bt = [Bc; zeros(B) ];
-
-Ct = [C, zeros(C) ];
-
-Sco = syslin(T, At, Bt, Ct, D)
+Ao = A - L*C
+Bo = B
 
 // simulation
 
 // use short impulse signal for 
 ui = zeros(1, 200); ui(1) = 1;
-us = ones(1, 200); ui(1) = 0;
+us = ones(1, 200); us(1) = 0;
 
 // assign signal
-u = us
+u = us * Umax
 
 // initial state
-x0 = [0;0]
+x0 = [Pmin;0]
 
 //opened-loop system
 x1 = ltitr(A, B, u, x0)
 y1 = C*x1 + D*u;
 
-// closed-loop system (ideal))
+// closed-loop system (ideal)
 x2 = ltitr(Ac, Bc, u, x0)
 y2 = C*x2 + D*u;
 
 // closed-loop system with the observer
-xco0 = [0;0;0;0]
-x3 = ltitr(At, Bt, u, xco0)
-y3 = Ct*x3 + D*u;
+x3 = zeros(2, length(u)); x3(:,1) = x0
+y3 = zeros(1,length(u))
+x3hat = zeros(2, length(u)); //x3hat(:,1) = x0
+y3hat = y3
+m3 = u
+m4 = m3 
+n = length(u)
+for i=1:n-1 do
+    //m4(i) = u(i) - K *x3hat(:, i)    
+    m3(i) = u(i) - K *x3hat(:, i) // error signal
+    // plant simulation
+    y3(:, i) = C * x3(:, i);
+    x3(:, i + 1) = A * x3(:, i) + Bo * m3(i);
+    // controller simulation
+    y3hat(:, i) = C * x3hat(:, i);
+    ye = y3(:, i) - y3hat(:, i);
+    x3hat(:, i + 1) = A * x3hat(:, i) + Bo * u(i) + L * ye;
+end
+y3(:, n) = C * x3(:, n);
+y3hat(:, n) = C * x3hat(:, n);
 
-subplot(311)
+subplot(221)
 plot(y1)
-subplot(312)
+subplot(222)
 plot(y2)
-subplot(313)
+subplot(223)
 plot(y3)
+subplot(224)
+plot(y3hat)
