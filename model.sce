@@ -113,16 +113,16 @@ x2 = ltitr(Ac, Bc, u, x0)
 y2 = C*x2 + D*u;
 
 // closed-loop system with the observer
+Nco = 7.47
+
 x3 = zeros(2, length(u)); x3(:,1) = x0
 y3 = zeros(1,length(u))
 x3hat = zeros(2, length(u)); //x3hat(:,1) = x0
 y3hat = y3
 m3 = u
-m4 = m3 
 n = length(u)
-for i=1:n-1 do
-    //m4(i) = u(i) - K *x3hat(:, i)    
-    m3(i) = u(i) - K *x3hat(:, i) // error signal
+for i=1:n-1 do   
+    m3(i) = Nco*u(i) - K *x3hat(:, i) // error signal
     // plant simulation
     y3(:, i) = C * x3(:, i);
     x3(:, i + 1) = A * x3(:, i) + B * m3(i);
@@ -134,6 +134,9 @@ end
 y3(:, n) = C * x3(:, n);
 y3hat(:, n) = C * x3hat(:, n);
 
+m4 = - K *x3hat
+
+f1 = figure();
 subplot(221)
 plot(y1)
 subplot(222)
@@ -142,3 +145,12 @@ subplot(223)
 plot(y3)
 subplot(224)
 plot(y3hat)
+f2 = figure();
+subplot(221)
+plot(x1')
+subplot(222)
+plot(x2')
+subplot(223)
+plot(x3')
+subplot(224)
+plot(x3hat')
