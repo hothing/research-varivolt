@@ -12,6 +12,7 @@ A = [1, T; 0, 1]
 // We cannot a motor can be represented with first-oder unit and it has a ramp function
 // the simplest way to account this is to use an acceleration as control signal in our model
 B = [T^2/2; T]
+B = [0; T]
 
 // measurement 
 x1min = 200 // [mm] minimal position
@@ -21,27 +22,56 @@ Umax = 95 // [V] maximal voltage
 
 kv = (Umax - Umin)/(x1max - x1min)
 
-C = [kv, 0]
+C = [kv, 0; 0, 1]
 // feedworward
-D = [0]
+D = [0; 0]
 
 // check a controlability
 // n = 2, R = [B, A*B]
 R = [B, A*B]
-rank(R) == 2
+disp(rank(R))
 
 // check observability
 // n = 2 
 O = [C; C*A]
-rank(O) == 2
+disp(rank(O))
 
-// colsed-loop model
-K = 0.1
+// opened-loop system
+So = syslin(T, A, B, C, D)
 
-Ac = A - B*K*C
+// closed-loop model
+//K = [22, 2]
+p = [-3 , -1]
 
-So = syslin('d', A, B, C, D)
+pr = -0.01 // -0.1 is good
+pi = 0.0
+p = [-pr + pi*%i, -pr - pi*%i]
 
-Sc = syslin('d', Ac, B, C, D)
+K = ppol(A,B, p)
 
+Ac = A - B*K
+spec(Ac)
+Ns = 12.1  // scaling factor
+Bc = B * Ns
 
+Sc = syslin(T, Ac, Bc, C, D)
+
+// simulation
+
+// use short impulse signal for 
+ui = zeros(1, 200); ui(1) = 1;
+us = ones(1, 200); ui(1) = 0;
+
+// assign signal
+u = us
+
+//opened-loop system
+x1=dsimul(So,u)
+
+// closed-loop system
+x2=dsimul(Sc,u); 
+
+subplot(121)
+plot(x1(1,:))
+subplot(122)
+plot(x2(1,:))
