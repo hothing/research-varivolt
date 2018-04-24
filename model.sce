@@ -125,11 +125,11 @@ for i=1:n-1 do
     m3(i) = u(i) - K *x3hat(:, i) // error signal
     // plant simulation
     y3(:, i) = C * x3(:, i);
-    x3(:, i + 1) = A * x3(:, i) + Bo * m3(i);
+    x3(:, i + 1) = A * x3(:, i) + B * m3(i);
     // controller simulation
     y3hat(:, i) = C * x3hat(:, i);
     ye = y3(:, i) - y3hat(:, i);
-    x3hat(:, i + 1) = A * x3hat(:, i) + Bo * u(i) + L * ye;
+    x3hat(:, i + 1) = Ac * x3hat(:, i) + B * u(i) + L * ye;
 end
 y3(:, n) = C * x3(:, n);
 y3hat(:, n) = C * x3hat(:, n);
