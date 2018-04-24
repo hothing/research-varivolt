@@ -7,23 +7,44 @@ T = 1 // sampling time
 // we cannot measure the position directly, but we have an indirect measurement by voltage
 // U = kv * x1
 // U has range [30V .. 95V]
-A = [1, T; 0, 1]
-// By fact, for control we can use only a speed setpoint, but!
-// We cannot a motor can be represented with first-oder unit and it has a ramp function
-// the simplest way to account this is to use an acceleration as control signal in our model
-B = [T^2/2; T]
-// B = [0; T]
 
 // measurement 
-x1min = 200 // [mm] minimal position
-x1max = 1000 // [mm] maximal position
+Pmin = 200 // [mm] minimal position
+Pmax = 1000 // [mm] maximal position
 Umin = 30 // [V] minimal voltage
 Umax = 95 // [V] maximal voltage
 
-kv = (Umax - Umin)/(x1max - x1min)
+// a changing of position is doing by a motor wich can be represented as First-Order-Unit
+// y(n+1) = a*y(n) + b*u(n+1)
+// a = Tp / (Tp + T)
+// b = Ku * T / (Tp + T)
 
-//C = [kv, 0; 0, 0]
+Tp = 2
+Ku = 1
+a2 = Tp / (Tp + T)
+b2 = Ku * T / (Tp + T)
+
+// a transformer translation factor depends from a lineer position of secondary coil
+// the linear position {p} is an intergral from the motor speed {w}
+// p(n+1) = p(n) + kw * w(n + 1)
+
+nm = 1350 // [1/min] nominal speed
+Tmr = 120 // [s] a movement time from end to end
+
+kw = ((Pmax - Pmin) / Tmr) / nm
+a1 = kw * T
+b1 = 0
+
+// A state-space matrix
+
+A = [1, a1; 0, a2]
+// For a control we use the "voltage" which is changing a motor speed
+B = [0; b2]
+
+// measurement matrix
+kv = (Umax - Umin)/(Pmax - Pmin)
 C = [kv, 0]
+
 // feedworward
 //D = [0; 0]
 D = 0
@@ -53,7 +74,7 @@ K = ppol(A,B, p)
 
 Ac = A - B*K
 spec(Ac)
-Ns = 12.1  // scaling factor
+Ns = 7328.132  // scaling factor
 Bc = B * Ns
 
 Sc = syslin(T, Ac, Bc, C, D)
