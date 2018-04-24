@@ -22,7 +22,7 @@ Umax = 95 // [V] maximal voltage
 nm = 1350 // [1/min] nominal speed
 
 Tp = 2
-Ku = nm / 100
+Ku = (nm - 0) / (100 -0)
 a2 = Tp / (Tp + T)
 b2 = Ku * T / (Tp + T)
 
@@ -69,15 +69,21 @@ So = syslin(T, A, B, C, D)
 //K = [22, 2]
 p = [-3 , -1]
 
-pr = -0.9 // -0.1 is good
-pi = 0.0
+pr = -0.87 // is good
+pi = 0.1
+
+//pr = -0.67 // 
+//pi = 0.1
+
 p = [-pr + pi*%i, -pr - pi*%i]
 
 K = ppol(A,B, p)
 
 Ac = A - B*K
+
 spec(Ac)
 Ns = 5.5384616  // scaling factor
+Ns = 14.898461
 Bc = B * Ns
 
 Sc = syslin(T, Ac, Bc, C, D)
@@ -89,18 +95,8 @@ opi = 0.0 //
 op = [-opr + opi*%i, -opr - opi*%i]
 L = ppol(A', C', op)'
 
-Nco = Ns
-
-Bo = B*Ncol
-
-//Ko = K
-// for observer we are recalculating feedbacks gain
-por = -0.8 // -0.1 is good
-poi = 0.01
-po = [-por + poi*%i, -por - poi*%i]
-Ko = ppol(A, Bo, po)
-//Ao = A - L*C
-Ao = A - Bo*Ko
+Nc = 7.31
+Ao = A - L*C
 
 
 // simulation
@@ -111,6 +107,7 @@ us = ones(1, 200); us(1) = 0;
 
 // assign signal
 u = us * Umax
+n = length(u)
 
 // initial state
 x0 = [Pmin;0]
@@ -120,35 +117,44 @@ x1 = ltitr(A, B, u, x0)
 y1 = C*x1 + D*u;
 
 // closed-loop system (ideal)
-x2 = ltitr(Ac, Bc, u, x0)
-y2 = C*x2 + D*u;
+//x2 = ltitr(Ac, Bc, u, x0)
+//y2 = C*x2 + D*u;
+x2 = zeros(2, n); x2(:,1) = x0
+y2 = zeros(1, n)
+m2 = u
+for i=1:n-1 do   
+    m2(i) = Ns * u(i) - K *x2(:, i) // error signal
+    // plant simulation
+    y2(:, i) = C * x2(:, i);
+    x2(:, i + 1) = A * x2(:, i) + B * m2(i);
+end
+y2(:, n) = C * x2(:, n);
 
 // closed-loop system with the observer
-us = ones(1, 1200); us(1) = 0;
-u = us * Umax
+us = ones(1, 200); us(1) = 0;
+r = us * Umax
+n = length(r)
 
-n = length(u)
-
-x3 = zeros(2, length(u)); x3(:,1) = x0
-y3 = zeros(1,length(u))
-x3hat = zeros(2, length(u)); //x3hat(:,1) = x0
+x3 = zeros(2, n); x3(:,1) = x0
+y3 = zeros(1, n)
+x3hat = zeros(2, n); //x3hat(:,1) = x0
 y3hat = y3
-m3 = u
+u = r
 
 for i=1:n-1 do   
-    m3(i) = u(i) - Ko *x3hat(:, i) // error signal
+    u(i) = Nc * r(i) - K *x3hat(:, i) // error signal
     // plant simulation
     y3(:, i) = C * x3(:, i);
-    x3(:, i + 1) = A * x3(:, i) + B * m3(i);
+    x3(:, i + 1) = A * x3(:, i) + B * u(i);
     // controller simulation
     y3hat(:, i) = C * x3hat(:, i);
     ye = y3(:, i) - y3hat(:, i);
-    x3hat(:, i + 1) = Ao * x3hat(:, i) + Bo * u(i) + L * ye;
+    x3hat(:, i + 1) = Ao * x3hat(:, i) + B * r(i) + L * ye;
 end
 y3(:, n) = C * x3(:, n);
 y3hat(:, n) = C * x3hat(:, n);
 
-m4 = - K *x3hat
+ue = - K *x3hat
 
 f1 = figure();
 subplot(221)
@@ -159,6 +165,7 @@ subplot(223)
 plot(y3)
 subplot(224)
 plot(y3hat)
+
 f2 = figure();
 subplot(221)
 plot(x1')
