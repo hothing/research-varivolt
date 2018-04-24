@@ -90,14 +90,17 @@ u = us
 x0 = [0;0]
 
 //opened-loop system
-[y1, x1] = flts(u, So, x0)
+x1 = ltitr(A, B, u, x0)
+y1 = C*x1 + D*u;
 
 // closed-loop system (ideal))
-[y2, x2] = flts(u, Sc, x0); 
+x2 = ltitr(Ac, Bc, u, x0)
+y2 = C*x2 + D*u;
 
 // closed-loop system with the observer
 xco0 = [0;0;0;0]
-[y3, x3] = flts(u, Sco, xco0); 
+x3 = ltitr(At, Bt, u, xco0)
+y3 = Ct*x3 + D*u;
 
 subplot(311)
 plot(y1)
