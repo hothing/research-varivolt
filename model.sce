@@ -89,8 +89,19 @@ opi = 0.0 //
 op = [-opr + opi*%i, -opr - opi*%i]
 L = ppol(A', C', op)'
 
-Ao = A - L*C
-Bo = B
+Nco = Ns
+
+Bo = B*Ncol
+
+//Ko = K
+// for observer we are recalculating feedbacks gain
+por = -0.8 // -0.1 is good
+poi = 0.01
+po = [-por + poi*%i, -por - poi*%i]
+Ko = ppol(A, Bo, po)
+//Ao = A - L*C
+Ao = A - Bo*Ko
+
 
 // simulation
 
@@ -113,23 +124,26 @@ x2 = ltitr(Ac, Bc, u, x0)
 y2 = C*x2 + D*u;
 
 // closed-loop system with the observer
-Nco = 7.47
+us = ones(1, 1200); us(1) = 0;
+u = us * Umax
+
+n = length(u)
 
 x3 = zeros(2, length(u)); x3(:,1) = x0
 y3 = zeros(1,length(u))
 x3hat = zeros(2, length(u)); //x3hat(:,1) = x0
 y3hat = y3
 m3 = u
-n = length(u)
+
 for i=1:n-1 do   
-    m3(i) = Nco*u(i) - K *x3hat(:, i) // error signal
+    m3(i) = u(i) - Ko *x3hat(:, i) // error signal
     // plant simulation
     y3(:, i) = C * x3(:, i);
     x3(:, i + 1) = A * x3(:, i) + B * m3(i);
     // controller simulation
     y3hat(:, i) = C * x3hat(:, i);
     ye = y3(:, i) - y3hat(:, i);
-    x3hat(:, i + 1) = Ac * x3hat(:, i) + B * u(i) + L * ye;
+    x3hat(:, i + 1) = Ao * x3hat(:, i) + Bo * u(i) + L * ye;
 end
 y3(:, n) = C * x3(:, n);
 y3hat(:, n) = C * x3hat(:, n);
