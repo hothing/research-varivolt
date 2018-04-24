@@ -12,7 +12,7 @@ A = [1, T; 0, 1]
 // We cannot a motor can be represented with first-oder unit and it has a ramp function
 // the simplest way to account this is to use an acceleration as control signal in our model
 B = [T^2/2; T]
-B = [0; T]
+// B = [0; T]
 
 // measurement 
 x1min = 200 // [mm] minimal position
@@ -22,9 +22,11 @@ Umax = 95 // [V] maximal voltage
 
 kv = (Umax - Umin)/(x1max - x1min)
 
-C = [kv, 0; 0, 1]
+//C = [kv, 0; 0, 0]
+C = [kv, 0]
 // feedworward
-D = [0; 0]
+//D = [0; 0]
+D = 0
 
 // check a controlability
 // n = 2, R = [B, A*B]
@@ -56,6 +58,25 @@ Bc = B * Ns
 
 Sc = syslin(T, Ac, Bc, C, D)
 
+// an observer making
+opr = 100 // 
+opi = 0.0 //
+op = [-opr + opi*%i, -opr - opi*%i]
+L = ppol(A', C', op)'
+
+At1 = A - B*K
+At2 = B * K
+At3 = zeros(A)
+At4 = A - L*C
+
+At = [At1, At2; At3, At4];
+
+Bt = [Bc; zeros(B) ];
+
+Ct = [C, zeros(C) ];
+
+Sco = syslin(T, At, Bt, Ct, D)
+
 // simulation
 
 // use short impulse signal for 
@@ -65,13 +86,22 @@ us = ones(1, 200); ui(1) = 0;
 // assign signal
 u = us
 
+// initial state
+x0 = [0;0]
+
 //opened-loop system
-x1=dsimul(So,u)
+[y1, x1] = flts(u, So, x0)
 
-// closed-loop system
-x2=dsimul(Sc,u); 
+// closed-loop system (ideal))
+[y2, x2] = flts(u, Sc, x0); 
 
-subplot(121)
-plot(x1(1,:))
-subplot(122)
-plot(x2(1,:))
+// closed-loop system with the observer
+xco0 = [0;0;0;0]
+[y3, x3] = flts(u, Sco, xco0); 
+
+subplot(311)
+plot(y1)
+subplot(312)
+plot(y2)
+subplot(313)
+plot(y3)
