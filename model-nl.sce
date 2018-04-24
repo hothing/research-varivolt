@@ -26,7 +26,9 @@ Umax = 95 // [V] maximal voltage
 nm = 1350 // [1/min] nominal speed
 
 Tp = 2
-Ku = (nm - 0) / (100 -0)
+Qmin = 0
+Qmax = 100
+Ku = (nm - 0) / (Qmax -Qmin)
 a2 = Tp / (Tp + T)
 b2 = Ku * T / (Tp + T)
 
@@ -50,6 +52,8 @@ B = [0; b2]
 
 // measurement matrix
 kv = (Umax - Umin)/(Pmax - Pmin)
+U0 = Umax - kv*Pmax
+// U = kv*P + U0
 C = [kv, 0]
 
 // feedworward
@@ -114,8 +118,8 @@ n = length(r)
 x0 = [Pmin;0]
 
 //opened-loop system
-x1 = ltitr(A, B, u, x0)
-y1 = C*x1 + D*u;
+x1 = ltitr(A, B, r, x0)
+y1 = C*x1 + D*r;
 
 // closed-loop system (ideal)
 //x2 = ltitr(Ac, Bc, u, x0)
@@ -124,7 +128,11 @@ x2 = zeros(2, n); x2(:,1) = x0
 y2 = zeros(1, n)
 u2 = r
 for i=1:n-1 do   
-    u2(i) = Ns * r(i) - K *x2(:, i) // error signal
+    ux = Ns * r(i) - K *x2(:, i) // error signal
+    // include a limiter of manipulation signal
+    if ux > Qmax then ux = Qmax; end
+    if ux < Qmin then ux = Qmin; end
+    u2(i) = ux
     // plant simulation
     y2(:, i) = C * x2(:, i);
     x2(:, i + 1) = A * x2(:, i) + B * u2(i);
@@ -132,8 +140,8 @@ end
 y2(:, n) = C * x2(:, n);
 
 // closed-loop system with the observer
-us = ones(1, 200); us(1) = 0;
-r = us * Umax
+us = ones(1, 300); us(1) = 0;
+r = us * (Umin + Umax)
 n = length(r)
 
 x3 = zeros(2, n); x3(:,1) = x0
@@ -142,16 +150,23 @@ x3hat = zeros(2, n); //x3hat(:,1) = x0
 y3hat = y3
 u3 = r
 
+Plim = Pmax - Pmin
+
 for i=1:n-1 do   
     // plant simulation
-    y3(:, i) = C * x3(:, i);
+    y3(:, i) = C * x3(:, i);    
     x3(:, i + 1) = A * x3(:, i) + B * u3(i);
+    
     // controller simulation
     y3hat(:, i) = C * x3hat(:, i);
     ye = y3(:, i) - y3hat(:, i);
     x3hat(:, i + 1) = Ao * x3hat(:, i) + B * r(i) + L * ye;
     // calculate manipulation 
-    u3(i+1) = Nc * r(i) - K *x3hat(:, i)
+    ux = Nc * r(i) - K *x3hat(:, i)
+    // include a limiter of manipulation signal
+    if ux > Qmax then ux = Qmax; end
+    if ux < Qmin then ux = Qmin; end
+    u3(i+1) = ux
 end
 y3(:, n) = C * x3(:, n);
 y3hat(:, n) = C * x3hat(:, n);
