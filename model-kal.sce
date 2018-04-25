@@ -77,27 +77,21 @@ So = syslin(T, A, B, C, D)
 // complex poles
 pr = -0.87 // is good
 pi = 0.1
+Ns = 14.898461 // acceptable only for these poles
+
+
 p = [-pr + pi*%i, -pr - pi*%i]
-Ns = 14.898461 // scaling factor, acceptable only for these poles
 
 K = ppol(A,B, p)
 
 Ac = A - B*K
 
 spec(Ac)
+//Ns = 5.5384616  // scaling factor
 
 Bc = B * Ns
 
 Sc = syslin(T, Ac, Bc, C, D)
-
-// Controller with an observer
-// an observer character
-op = [0.98; 0.67]
-L = ppol(A', C', op)'
-
-Nc = 6.9374759
-Ao = A - L*C
-
 
 // simulation
 
@@ -134,9 +128,19 @@ for i=1:n-1 do
 end
 y2(:, n) = C * x2(:, n);
 
-// closed-loop system with the observer
-us = ones(1, 300); us(1) = 0;
-r = us * (Umin + Umax)
+// closed-loop system with the observer (Kalman filter)
+
+// Kalman filter weighting matrixes 
+Usd = 16
+Q = [0.1, 0; 0, 0.01]
+S = Usd^2
+Nf = 11.693973
+
+t=0:T:T*3600
+deff('u=ureference(t)','u=abs(sin(0.01*t))')
+
+us = ureference();
+r = us * 50
 n = length(r)
 
 x3 = zeros(2, n); x3(:,1) = x0
@@ -144,18 +148,44 @@ y3 = zeros(1, n)
 x3hat = zeros(2, n); //x3hat(:,1) = x0
 y3hat = y3
 u3 = r
+P = zeros(A)
+
+ns3 = grand(1, n, "nor", 0, Usd)
+y3n = y3
+ye = y3
+
+// prepare a Kalman filter gain matrix 
+for j=1:600 do
+    Pminus = A * P * A' + Q
+    Kp = (C * Pminus * C' + S)^-1
+    Kk = Pminus * C' * Kp // [n x 1]
+    P = (eye(P) - Kk*C) * Pminus
+end
 
 for i=1:n-1 do   
     // plant simulation
     y3(:, i) = C * x3(:, i);    
     x3(:, i + 1) = A * x3(:, i) + B * u3(i);
+    // simulate a noised measurement
+    y3n(:,i) = y3(:,i) + ns3(:,i)
     
     // controller simulation
     y3hat(:, i) = C * x3hat(:, i);
-    ye = y3(:, i) - y3hat(:, i);
-    x3hat(:, i + 1) = Ao * x3hat(:, i) + B * r(i) + L * ye;
+    // Kalman filter
+    x3hatminus = A * x3hat(:, i) + B * u3(:, i)
+    //Pminus = A * P * A' + Q
+    //Kp = (C * Pminus * C' + S)^-1
+    //Kk = Pminus * C' * Kp // [n x 1]
+    //P = (eye(P) - Kk*C) * Pminus
+    // estimation error
+    ey = y3n(:,i) - C * x3hatminus
+    ye(:,i) = ey
+    // X expectation
+    x3hat(:, i + 1) = x3hatminus + Kk * ey
+
     // calculate manipulation 
-    ux = Nc * r(i) - K *x3hat(:, i)
+    ux = Nf * r(i) - K *x3hat(:, i)
+    //ux = r(i) // open the system
     // include a limiter of manipulation signal
     if ux > Qmax then ux = Qmax; end
     if ux < Qmin then ux = Qmin; end
@@ -163,6 +193,8 @@ for i=1:n-1 do
 end
 y3(:, n) = C * x3(:, n);
 y3hat(:, n) = C * x3hat(:, n);
+
+xe3 = x3 - x3hat
 
 // plotting
 
@@ -174,7 +206,7 @@ plot(y2)
 subplot(223)
 plot(y3)
 subplot(224)
-plot(y3hat)
+plot(y3n)
 
 f2 = figure();
 subplot(221)
@@ -191,3 +223,6 @@ subplot(121)
 plot(u2)
 subplot(122)
 plot(u3)
+
+f4 = figure();
+plot(xe3')
