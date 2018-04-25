@@ -99,9 +99,8 @@ Sc = syslin(T, Ac, Bc, C, D)
 op = [0.98; 0.67]
 L = ppol(A', C', op)'
 
-Nc = 6.9374759
+Nc = 9.4004061
 Ao = A - L*C
-
 
 // simulation
 
@@ -112,16 +111,11 @@ ui = zeros(1, n); ui(1) = 1;
 us = ones(1, n); us(1) = 0;
 uf = abs(sin(0.02*t))
 
-
 // assign signal
 r = us * (Umax - Umin) * 0.5
 
 // initial state
 x0 = [Pmin;0]
-
-//opened-loop system
-x1 = ltitr(A, B, r, x0)
-y1 = C*x1 + D*r;
 
 // closed-loop system (ideal)
 //x2 = ltitr(Ac, Bc, u, x0)
@@ -141,22 +135,48 @@ for i=1:n-1 do
 end
 y2(:, n) = C * x2(:, n);
 
+x3 = zeros(2, n); x3(:,1) = x0
+y3 = zeros(1, n)
+x3hat = zeros(2, n); //x3hat(:,1) = x0
+y3hat = y3
+u3 = r
+
+for i=1:n-1 do   
+    // plant simulation
+    y3(:, i) = C * x3(:, i);    
+    x3(:, i + 1) = A * x3(:, i) + B * u3(i);
+    
+    // controller simulation
+    y3hat(:, i) = C * x3hat(:, i);
+    ye = y3(:, i) - y3hat(:, i);
+    x3hat(:, i + 1) = Ao * x3hat(:, i) + B * r(i) + L * ye;
+    // calculate manipulation 
+    ux = Nc * r(i) - K *x3hat(:, i)
+    // include a limiter of manipulation signal
+    if ux > Qlimp then ux = Qlimp; end
+    if ux < Qlimn then ux = Qlimn; end
+    u3(i+1) = ux
+end
+y3(:, n) = C * x3(:, n);
+y3hat(:, n) = C * x3hat(:, n);
+
 // plotting
 
 f1 = figure();
 subplot(211)
-plot([t', t'], [r', y1'])
-subplot(212)
 plot([t', t'], [r', y2'])
+subplot(212)
+plot([t', t'], [r', y3'])
 
 
 f2 = figure();
 subplot(211)
-plot(x1')
-subplot(212)
 plot(x2')
+subplot(212)
+plot(x3')
 
 f3 = figure();
 subplot(211)
 plot(u2)
-
+subplot(212)
+plot(u3)

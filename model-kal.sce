@@ -28,6 +28,8 @@ nm = 1350 // [1/min] nominal speed
 Tp = 2
 Qmin = 0
 Qmax = 100
+Qlimp = Qmax
+Qlimn = -Qmax
 Ku = (nm - 0) / (Qmax -Qmin)
 a2 = Tp / (Tp + T)
 b2 = Ku * T / (Tp + T)
@@ -70,24 +72,18 @@ disp(rank(R))
 O = [C; C*A]
 disp(rank(O))
 
-// opened-loop system
-So = syslin(T, A, B, C, D)
-
 // closed-loop model
 // complex poles
 pr = -0.87 // is good
 pi = 0.1
-Ns = 14.898461 // acceptable only for these poles
-
-
 p = [-pr + pi*%i, -pr - pi*%i]
 
 K = ppol(A,B, p)
+Ns = 14.898461 // acceptable only for these poles
 
 Ac = A - B*K
 
 spec(Ac)
-//Ns = 5.5384616  // scaling factor
 
 Bc = B * Ns
 
@@ -96,19 +92,23 @@ Sc = syslin(T, Ac, Bc, C, D)
 // simulation
 
 // use short impulse signal for 
-ui = zeros(1, 200); ui(1) = 1;
-us = ones(1, 200); us(1) = 0;
+//ui = zeros(1, 200); ui(1) = 1;
+//us = ones(1, 200); us(1) = 0;
+t=0:T:T*3600
+n = length(t)
+ui = zeros(1, n); ui(1) = 1;
+us = ones(1, n); us(1) = 0;
+uf = abs(sin(0.02*t))
+ug = us + 0.1 * sin(0.05*t)
 
 // assign signal
-r = us * Umax
-n = length(r)
+r = ug * (Umax - Umin) * 0.5
+
 
 // initial state
 x0 = [Pmin;0]
 
-//opened-loop system
-x1 = ltitr(A, B, r, x0)
-y1 = C*x1 + D*r;
+//////////////////////////////////////////
 
 // closed-loop system (ideal)
 //x2 = ltitr(Ac, Bc, u, x0)
@@ -119,8 +119,8 @@ u2 = r
 for i=1:n-1 do   
     ux = Ns * r(i) - K *x2(:, i) // error signal
     // include a limiter of manipulation signal
-    if ux > Qmax then ux = Qmax; end
-    if ux < Qmin then ux = Qmin; end
+    if ux > Qlimp then ux = Qlimp; end
+    if ux < Qlimn then ux = Qlimn; end
     u2(i) = ux
     // plant simulation
     y2(:, i) = C * x2(:, i);
@@ -134,18 +134,12 @@ y2(:, n) = C * x2(:, n);
 Usd = 16
 Q = [0.1, 0; 0, 0.01]
 S = Usd^2
-Nf = 11.693973
+Nf = 14.702287
 
-t=0:T:T*3600
-deff('u=ureference(t)','u=abs(sin(0.01*t))')
-
-us = ureference();
-r = us * 50
-n = length(r)
 
 x3 = zeros(2, n); x3(:,1) = x0
 y3 = zeros(1, n)
-x3hat = zeros(2, n); //x3hat(:,1) = x0
+x3hat = zeros(2, n); x3hat(:,1) = x0
 y3hat = y3
 u3 = r
 P = zeros(A)
@@ -187,8 +181,8 @@ for i=1:n-1 do
     ux = Nf * r(i) - K *x3hat(:, i)
     //ux = r(i) // open the system
     // include a limiter of manipulation signal
-    if ux > Qmax then ux = Qmax; end
-    if ux < Qmin then ux = Qmin; end
+    if ux > Qlimp then ux = Qlimp; end
+    if ux < Qlimn then ux = Qlimn; end
     u3(i+1) = ux
 end
 y3(:, n) = C * x3(:, n);
@@ -199,29 +193,22 @@ xe3 = x3 - x3hat
 // plotting
 
 f1 = figure();
-subplot(221)
-plot(y1)
-subplot(222)
-plot(y2)
-subplot(223)
-plot(y3)
-subplot(224)
-plot(y3n)
+subplot(211)
+plot([t', t'], [r', y2'])
+subplot(212)
+plot([t', t'], [r', y3'])
+
 
 f2 = figure();
-subplot(221)
-plot(x1')
-subplot(222)
+subplot(211)
 plot(x2')
-subplot(223)
+subplot(212)
 plot(x3')
-subplot(224)
-plot(x3hat')
 
 f3 = figure();
-subplot(121)
+subplot(211)
 plot(u2)
-subplot(122)
+subplot(212)
 plot(u3)
 
 f4 = figure();
