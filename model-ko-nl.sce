@@ -187,7 +187,7 @@ for i=1:n-1 do
     // calculate manipulation 
     err(i) = r(i) - y3hat(:, i)
     if abs(err(i)) < 0.5 then
-        ex = 0xhat
+        ex = 0
     else
         ex = err(i)
     end
