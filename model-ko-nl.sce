@@ -18,7 +18,7 @@ Pmax = 1000 // [mm] maximal position
 Umin = 30 // [V] minimal voltage
 Umax = 95 // [V] maximal voltage
 
-// a changing of position is doing by a motor wich can be represented as First-Order-Unit
+// a changing of position is doing by a motor which can be represented as First-Order-Unit
 // y(n+1) = a*y(n) + b*u(n+1)
 // a = Tp / (Tp + T)
 // b = Ku * T / (Tp + T)
@@ -187,7 +187,7 @@ for i=1:n-1 do
     // calculate manipulation 
     err(i) = r(i) - y3hat(:, i)
     if abs(err(i)) < 0.5 then
-        ex = 0
+        ex = 0xhat
     else
         ex = err(i)
     end

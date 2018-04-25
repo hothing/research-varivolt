@@ -167,10 +167,6 @@ for i=1:n-1 do
     y3hat(:, i) = C * x3hat(:, i);
     // Kalman filter
     x3hatminus = A * x3hat(:, i) + B * u3(:, i)
-    //Pminus = A * P * A' + Q
-    //Kp = (C * Pminus * C' + S)^-1
-    //Kk = Pminus * C' * Kp // [n x 1]
-    //P = (eye(P) - Kk*C) * Pminus
     // estimation error
     ey = y3n(:,i) - C * x3hatminus
     ye(:,i) = ey
