@@ -91,15 +91,15 @@ Sc = syslin(T, Ac, Bc, C, D)
 
 // simulation
 
-// use short impulse signal for 
-//ui = zeros(1, 200); ui(1) = 1;
-//us = ones(1, 200); us(1) = 0;
-t=0:T:T*3600
+// set of testing reference signals
+Tmax = T*3600 
+t=0:T:Tmax
 n = length(t)
 ui = zeros(1, n); ui(1) = 1;
 us = ones(1, n); us(1) = 0;
 uf = abs(sin(0.02*t))
-ug = us + 0.1 * sin(0.05*t)
+ug = us + 0.1 * sin(0.005*t)
+uh = us + 0.001 * t
 
 // assign signal
 r = ug * (Umax - Umin) * 0.5
@@ -159,9 +159,11 @@ end
 
 // controller aux. state vars
 crz = 0 // manipulation cross zero mark
-dcd = 0
-Kg = 12 // gain
-Tp = 3 // pause between the direction changes (cross zero after delay)
+dcd = 0 // delay afte direction changing
+dss = 0 // delay after stop
+Kg = 15 // gain
+Tp = 5 // pause between the direction changes (cross zero after delay)
+Ts = 20 // stop pause
 ux = [0,0]
 
 for i=1:n-1 do   
@@ -175,10 +177,7 @@ for i=1:n-1 do
     y3hat(:, i) = C * x3hat(:, i);
     // Kalman filter
     x3hatminus = A * x3hat(:, i) + B * u3(:, i)
-    //Pminus = A * P * A' + Q
-    //Kp = (C * Pminus * C' + S)^-1
-    //Kk = Pminus * C' * Kp // [n x 1]
-    //P = (eye(P) - Kk*C) * Pminus
+
     // estimation error
     ey = y3n(:,i) - C * x3hatminus
     ye(:,i) = ey
@@ -200,7 +199,10 @@ for i=1:n-1 do
     if crz then dcd = i; end
     if dcd + Tp <=i then dcd = 0; end
     
-    if dcd > 0 then ux(1) = 0
+    if abs(ux(2)) < 0.1 then dss = i; end
+    if dss + Ts <=i then dss = 0; end
+    
+    if (dcd > 0) | (dss > 0) then ux(1) = 0
     else ux(1) = ux(2)
     end
         
@@ -209,10 +211,12 @@ for i=1:n-1 do
     if ux(1) < Qlimn then ux(1) = Qlimn; end
     u3(i+1) = ux(1)
 end
+
 y3(:, n) = C * x3(:, n);
 y3hat(:, n) = C * x3hat(:, n);
 
 xe3 = x3 - x3hat
+ye3 = y3 - y3hat
 
 // plotting
 
@@ -236,4 +240,7 @@ subplot(212)
 plot(u3)
 
 f4 = figure();
+subplot(211)
 plot(xe3')
+subplot(212)
+plot(ye3')
