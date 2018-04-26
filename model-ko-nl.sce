@@ -132,8 +132,9 @@ y2(:, n) = C * x2(:, n);
 
 // Kalman filter weighting matrixes 
 Usd = 16
-Q = [0.1, 0; 0, 0.01]
-S = Usd^2
+//Q = [0.1, 0; 0, 0.01] // is very good
+Q = [0.1, 0.01; 0.01, 0.1]
+S = (Usd*1)^2
 Nf = 14.702287
 
 
