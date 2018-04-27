@@ -4,7 +4,7 @@
 //
 // The test of varivolt movements and control
 
-T = 1 // sampling time
+T = 0.1 // sampling time
 
 // X = [x1; x2] where x1 - is position, x2 - is velocity
 // x1 has range 200 .. 1000mm 
@@ -13,7 +13,7 @@ T = 1 // sampling time
 // U has range [30V .. 95V]
 
 // measurement 
-Pmin = 200 // [mm] minimal position
+Pmin = 0 // [mm] minimal position
 Pmax = 1000 // [mm] maximal position
 Umin = 30 // [V] minimal voltage
 Umax = 95 // [V] maximal voltage
@@ -24,13 +24,14 @@ Umax = 95 // [V] maximal voltage
 // b = Ku * T / (Tp + T)
 
 nm = 1350 // [1/min] nominal speed
+nms = nm / 60 // nominal speed [1/s]
 
 Tp = 2
 Qmin = 0
 Qmax = 100
 Qlimp = Qmax
 Qlimn = -Qmax
-Ku = (nm - 0) / (Qmax -Qmin)
+Ku = (nms - 0) / (Qmax -Qmin)
 a2 = Tp / (Tp + T)
 b2 = Ku * T / (Tp + T)
 
@@ -41,8 +42,8 @@ b2 = Ku * T / (Tp + T)
 
 Tmr = 120 // [s] a movement time from end to end
 
-vx = (Pmax - Pmin) / Tmr // nominal linear speed
-kw = vx / nm // speed translation factor
+vx = (Pmax - Pmin) / Tmr // nominal linear speed [mm/s]
+kw = vx / nms // translation factor [mm]
 a1 = kw * T
 b1 = 0
 
@@ -92,7 +93,7 @@ Sc = syslin(T, Ac, Bc, C, D)
 // simulation
 
 // set of testing reference signals
-Tmax = T*3600 
+Tmax = 3600 
 t=0:T:Tmax
 n = length(t)
 ui = zeros(1, n); ui(1) = 1;
