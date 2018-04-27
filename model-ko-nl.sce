@@ -75,11 +75,11 @@ disp(rank(O))
 
 // closed-loop model
 // complex poles
-pr = -0.87 // is good
-pi = 0.1
+pr = -0.1 // is good
+pi = 0.0
 p = [-pr + pi*%i, -pr - pi*%i]
 
-K = ppol(A,B, p)
+K = ppol(A, B, p)
 Ns = 14.898461 // acceptable only for these poles
 
 Ac = A - B*K

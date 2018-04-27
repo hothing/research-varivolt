@@ -4,7 +4,7 @@
 //
 // The test of varivolt movements and control
 
-T = 1 // sampling time
+T = 0.1 // sampling time
 
 // X = [x1; x2] where x1 - is position, x2 - is velocity
 // x1 has range 200 .. 1000mm 
@@ -24,13 +24,14 @@ Umax = 95 // [V] maximal voltage
 // b = Ku * T / (Tp + T)
 
 nm = 1350 // [1/min] nominal speed
+nms = nm / 60 // nominal speed [1/s]
 
 Tp = 2
 Qmax = 100
 Qlimp = Qmax
 Qlimn = -Qmax
 
-Ku = (nm) / (Qmax)
+Ku = (nms) / (Qmax)
 
 a2 = Tp / (Tp + T)
 b2 = Ku * T / (Tp + T)
@@ -43,7 +44,7 @@ b2 = Ku * T / (Tp + T)
 Tmr = 120 // [s] a movement time from end to end
 
 vx = (Pmax - Pmin) / Tmr // nominal linear speed
-kw = vx / nm // speed translation factor
+kw = vx / nms // speed translation factor
 a1 = kw * T
 b1 = 0
 
@@ -105,7 +106,8 @@ Ao = A - L*C
 // simulation
 
 // simulate reference signals
-t=0:T:360
+Tmax = Tmr
+t=0:T:Tmax
 n = length(t)
 ui = zeros(1, n); ui(1) = 1;
 us = ones(1, n); us(1) = 0;
@@ -113,7 +115,7 @@ uf = abs(sin(0.02*t))
 
 
 // assign signal
-r = us * (Umax - Umin) * 100.0
+r = us * 100.0
 
 // initial state
 x0 = [Pmin;0]
@@ -122,40 +124,10 @@ x0 = [Pmin;0]
 x1 = ltitr(A, B, r, x0)
 y1 = C*x1 + D*r;
 
-// closed-loop system (ideal)
-//x2 = ltitr(Ac, Bc, u, x0)
-//y2 = C*x2 + D*u;
-x2 = zeros(2, n); x2(:,1) = x0
-y2 = zeros(1, n)
-u2 = r
-for i=1:n-1 do   
-    ux = Ns * r(i) - K *x2(:, i) // error signal
-    // include a limiter of manipulation signal
-    if ux > Qlimp then ux = Qlimp; end
-    if ux < Qlimn then ux = Qlimn; end
-    u2(i) = ux
-    // plant simulation
-    y2(:, i) = C * x2(:, i);
-    x2(:, i + 1) = A * x2(:, i) + B * u2(i);
-end
-y2(:, n) = C * x2(:, n);
-
 // plotting
 
 f1 = figure();
 subplot(211)
 plot([t', t'], [r', y1'])
 subplot(212)
-plot([t', t'], [r', y2'])
-
-
-f2 = figure();
-subplot(211)
-plot(x1')
-subplot(212)
-plot(x2')
-
-f3 = figure();
-subplot(211)
-plot(u2)
-
+plot(t', x1')
