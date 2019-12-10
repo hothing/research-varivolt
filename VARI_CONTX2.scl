@@ -1,0 +1,331 @@
+﻿FUNCTION_BLOCK "VARI_CONTX2"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      iEnable { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Enable the controller
+      iLock { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Lock the controller
+      iFbRunInc { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Feedback: motor is running up/increase
+      iFbRunDec { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Feedback: motor is running down/decrease
+      iFbLsHigh { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Feedback: Highest voltage position
+      iFbLsLow { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Feedback: Lowest voltage position
+      iMeasOn { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Feedback: measurement is active
+      iUset { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Real;   // Target voltage
+      iUact { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Real;   // Actual voltage (MUST  BE NOT FILTERED!!!)
+      iFbSpd { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Real;   // Feedback: motor speed
+      pCycle { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Time := T#10ms;   // Cycle time [parameter]
+   END_VAR
+
+   VAR_OUTPUT 
+      qUest { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Real;   // Estimated voltage
+      qSpdSet { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Real;   // Motor speed setpoint
+      qOnInc { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Cmd to increase voltage
+      qOnDec { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Cmd to decrease voltage
+      qReached { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Target is reached
+   END_VAR
+
+   VAR 
+      pServoDrive { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool := false;   // 0 = MotV2D, 1=FC-Servo
+   END_VAR
+   VAR RETAIN
+      pUseFbMot { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Bool;   // Use the motor feedbacks as model inputs
+      pSetPosByLS { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Bool;   // Set internal X by limit-switch
+      pUeps { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Real := 0.5;   // Sensivity [V]
+      pEpsHyst { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Int := 50;   // Relative hysteresys [%, 1 ..100]
+      pXmax { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Real := 900.0;   // Max. shaff position [mm]
+      pXmin { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Real := 0.0;   // Min. shaff position [mm]
+   END_VAR
+   VAR DB_SPECIFIC
+      pUmax { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Real := 100.0;   // Maximum of measured voltage [V]
+      pUmin { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Real := 30.0;   // Minimum of measured voltage [V]
+      pOutMax { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Real := 100.0;   // Manipulation signal range [0 .. Max] or [-Max .. Max] (mode = 3)
+      pOutMin { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Real := 5.0;   // Manipulation signal minimum (only for modes < 3)
+   END_VAR
+   VAR RETAIN
+      pST { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Time := T#100ms;   // Sampling time (usually =0.1 sec) DO NOT CHANGE!
+      pTd { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Time := T#3s;   // Pause at the direction change
+      pTs { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Time := T#10s;   // Pause at stop
+      pTr { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Time := T#1m;   // Moving time (approx  =Ts / 2)
+      pNc { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : LReal := 144.81758;   // SS controller gain
+      pKs { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Array[1..2] of LReal := 9.6545, 0.01;   // State-space feedbacks gain matrix
+      pLk { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Array[1..2] of LReal := 0.0198647, 0.000249;   // Kalman gain matrix
+      pA { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Array[1..4] of LReal := 1.0, 0.0003991, 0.0, 0.7142;   // State-space model - A dynamics matrix
+      pB { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Array[1..2] of LReal := 0.0, 8.5714;   // State-space model - B manipulation matrix
+      pC { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'; S7_SetPoint := 'True'} : Array[1..2] of LReal := 0.0667, 0.0;   // State-space model - C measurements matrix
+   END_VAR
+   VAR 
+      sXhat { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Array[1..2] of LReal;   // Process variables estimation
+      sXhatminus { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Array[1..2] of LReal;   // Process variables pre-estimation
+      sUx { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Array[0..2] of LReal;   // State space: manipulation signal
+      sYhat { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Array[0..1] of LReal;   // Measurements estimation
+      sYerr { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Array[0..1] of LReal;   // State error
+      sEact { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Real;   // Estimated volatge without load
+      sEset { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Real;   // Estimated volatge without load
+      sPrcErr { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : LReal;   // Process error
+      sReached { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;
+      sMotDirCnhg { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Motor will change the direction
+      sMotStop { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;   // Motor will stopped
+      sMotRunOut { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Bool;
+      TMR { ExternalAccessible := 'False'; ExternalVisible := 'False'; ExternalWritable := 'False'} : Array[0..3] of Time;   // Timers
+   END_VAR
+
+   VAR_TEMP 
+      tSample : Bool;   // Mark of a sampling event
+      tEnable : Bool;
+      tOnUp : Bool;
+      tOnDown : Bool;
+      tRun : Bool;
+      tMotEn : Bool;
+      tOutBad : Bool;
+      tMSCorr : DInt;   // cycle time correction
+      tMnl : Real;   // prepared manipulation signal
+      tMnlAct : Real;
+      tUact : LReal;   // translated actual voltage
+      tUset : LReal;   // translated target voltage
+      tUrng : LReal;
+      tUtrl : Real;
+   END_VAR
+
+
+BEGIN
+	//////////////////////////// WARNING //////////////////////////////
+	// DO NOT CHANGE THE PARAMETERS IF YOU DO NOT KNOW WHAT IS THIS! //
+	///////////////////////////////////////////////////////////////////
+	// These parameters must be prepared in the Matlab/Scilab/Octave.
+	// The parameters A, B, C, Ks, Lk are very sensetive
+	// to the sampling time {pST}!!
+	// The parameter {C} depends from {pUmin, pUmax}
+	// The parameters A and B depend from a device data:
+	// (motor nominal speed, gear factor, response time)
+	// The parameter {Nc} depends from Ks.
+	// The parameter {Ks} depends from A, B.
+	// The parameter {Lk} depends from A, C.
+	
+	
+	REGION prepare the control
+	    // enable a controller
+	    #tEnable := #iEnable AND NOT #iLock;
+	    
+	    #tRun := #iFbRunInc OR #iFbRunDec;
+	    
+	END_REGION
+	
+	REGION translate voltage
+	    
+	    #sEact := (#iUact);
+	    #sEset := (#iUset);
+	
+	    #tUrng := #pUmax - #pUmin;
+	    #tUact := #sEact - #pUmin;
+	    #tUset := #sEset - #pUmin;
+	    
+	    IF (#tUact < 0) OR NOT #iMeasOn THEN
+	        #tUact := 0;
+	    ELSIF #tUact > #tUrng THEN
+	        #tUact := #tUrng;
+	    END_IF;
+	    
+	    IF #tUset < 0 THEN
+	        #tUset := 0;
+	    ELSIF #tUset > #tUrng THEN
+	        #tUset := #tUrng;
+	    END_IF;
+	    
+	    IF NOT #iMeasOn THEN
+	        #tUact := #sYhat[0];
+	    END_IF;
+	END_REGION
+	
+	REGION Filters init & limits
+	    // initialize estimated variables in the end positions
+	    IF #iFbLsLow AND #pSetPosByLS THEN
+	        #sXhat[1] := #pXmin;
+	        #sXhat[2] := 0.0; // physically it is stopped
+	    ELSIF #iFbLsHigh AND #pSetPosByLS THEN
+	        #sXhat[1] := #pXmax;
+	        #sXhat[2] := 0.0; // physically it is stopped
+	    END_IF;
+	END_REGION
+	
+	REGION Target monitoring
+	    #pUeps := ABS(#pUeps);
+	    #pEpsHyst := LIMIT(MN:=1, IN:=#pEpsHyst, MX:=100);
+	    #tUtrl := #pUeps * INT_TO_REAL(#pEpsHyst) / 100.0;
+	    IF (#sPrcErr < #tUtrl) OR (#sPrcErr > - #tUtrl) THEN
+	        #sReached := 1;
+	    END_IF;
+	    IF (ABS(#sPrcErr) > #pUeps) THEN
+	        #sReached := 0;
+	    END_IF;
+	END_REGION
+	
+	REGION Internal timers
+	    #TMR[0] := #TMR[0] + #pCycle;
+	    #tMSCorr := TIME_TO_DINT(#TMR[0]) - TIME_TO_DINT(#pST);
+	    #tSample := #tMSCorr >= 0;
+	    
+	    REGION timers checking
+	        IF #TMR[0] < T#0ms OR #TMR[0] > T#1m THEN
+	            #TMR[0] := T#0ms;
+	        END_IF;
+	        IF #TMR[1] < T#0ms THEN
+	            #TMR[1] := T#0ms;
+	        END_IF;
+	        IF #TMR[2] < T#0ms THEN
+	            #TMR[2] := T#0ms;
+	        END_IF;
+	        IF #TMR[3] < T#0ms THEN
+	            #TMR[3] := T#0ms;
+	        END_IF;
+	    END_REGION
+	END_REGION
+	
+	REGION Sampling & calculation the filetrs AND controllers 
+	    IF #tSample THEN
+	        #TMR[0] := #tMSCorr;
+	        
+	        REGION Feedbacks convertion
+	            IF #pUseFbMot THEN
+	                #tMnlAct := #iFbSpd;
+	                IF #pServoDrive THEN
+	                    IF #tMnlAct > #pOutMax THEN
+	                        #tMnlAct := #pOutMax;
+	                    ELSIF #tMnlAct < - #pOutMax THEN
+	                        #tMnlAct := - #pOutMax;
+	                    END_IF;
+	                ELSE
+	                    IF #tMnlAct < 0 THEN
+	                        #tMnlAct := ABS(#tMnlAct);
+	                    END_IF;
+	                    IF #tMnlAct > #pOutMax THEN
+	                        #tMnlAct := #pOutMax;
+	                    END_IF;
+	                    IF #iFbRunDec THEN
+	                        #tMnlAct := - #tMnlAct;
+	                    ELSIF #iFbRunInc THEN
+	                        ;
+	                    ELSE
+	                        #tMnlAct := 0.0;
+	                    END_IF;
+	                END_IF;
+	                #sUx[0] := #tMnlAct;
+	            END_IF;
+	        END_REGION
+	        
+	        REGION Kalman filter: observer
+	            // Xhatmins = A * xhat + B * u
+	            #sXhatminus[1] := #pA[1] * #sXhat[1] + #pA[2] * #sXhat[2] + #pB[1] * #sUx[0];
+	            #sXhatminus[2] := #pA[3] * #sXhat[1] + #pA[4] * #sXhat[2] + #pB[2] * #sUx[0];
+	            // Yhat = C * Xhat
+	            #sYhat[0] := #pC[1] * #sXhat[1] + #pC[2] * #sXhat[2];
+	            // Yerr = Y - C*xhatminus
+	            IF #iMeasOn THEN
+	                #sYerr[0] := #tUact - #pC[1] * #sXhatminus[1] + #pC[2] * #sXhatminus[2];
+	            ELSE
+	                #sYerr[0] := 0.0;
+	            END_IF;
+	        END_REGION
+	
+	        // save previous value of manipulation: it will use for direction change detection
+	        #sUx[2] := #sUx[1];
+	        
+	        REGION Controllers            
+	            #sPrcErr := #tUset - #sYhat[0]; // process error
+	            // State-space controller
+	            #sUx[1] := #pNc * #tUset - (#pKs[1] * #sXhat[1] + #pKs[2] * #sXhat[2]);
+	        END_REGION
+	        
+	        REGION Kalman filter : Update estimated state
+	            // xhat = xhatminus + Lk * Yerr
+	            #sXhat[1] := #sXhatminus[1] + #pLk[1] * #sYerr[0];
+	            #sXhat[2] := #sXhatminus[2] + #pLk[2] * #sYerr[0];
+	        END_REGION
+	    END_IF;
+	END_REGION
+	
+	REGION Motor control
+	    //#tOutBad := #tReached AND (ABS(#sUx[1]) <= #pOutMin);
+	    #tOutBad := #sReached;
+	    #tMotEn := #tEnable AND NOT (#sMotStop OR #sMotDirCnhg OR #sMotRunOut);
+	    
+	    IF NOT #tMotEn OR #tOutBad THEN
+	        #sUx[0] := 0.0;
+	        #tOnUp := FALSE;
+	        #tOnDown := FALSE;
+	    ELSE
+	        #sUx[0] := #sUx[1];
+	        #tOnUp := #tMotEn AND NOT #iFbLsHigh AND #sUx[0] > 0;
+	        #tOnDown := #tMotEn AND NOT #iFbLsLow AND #sUx[0] < 0;
+	    END_IF;
+	    
+	    IF #sUx[0] > #pOutMax THEN
+	        #sUx[0] := #pOutMax;
+	    ELSIF #sUx[0] < - #pOutMax THEN
+	        #sUx[0] := - #pOutMax;
+	    END_IF;
+	    
+	    IF #pServoDrive THEN
+	        // the motor is controlling by FC
+	        // the speed setpoint consists also the direction
+	        #tMnl := LREAL_TO_REAL(#sUx[0]);
+	    ELSE
+	        // the motor is 2-direction with varibale speed
+	        // the speed setpoint must be always positive
+	        #tMnl := LREAL_TO_REAL(ABS(#sUx[0]));
+	        IF #tMnl < #pOutMin AND #tMotEn AND NOT #tOutBad THEN
+	            #tMnl := #pOutMin;
+	        END_IF;
+	    END_IF;
+	    
+	    REGION Time related states
+	        // a manipulation signal cross a zero
+	        IF (#sUx[2] > #pUeps AND #sUx[1] < - #pUeps) OR (#sUx[2] < - #pUeps AND #sUx[1] > #pUeps) THEN
+	            #sMotDirCnhg := TRUE;
+	        END_IF;
+	        // the motor will stopped
+	        IF ABS(#sUx[0]) <= #pUeps OR #sMotRunOut THEN
+	            #sMotStop := true;
+	            #sMotRunOut := FALSE;
+	        END_IF;
+	        //the motor is changing direction
+	        IF #sMotDirCnhg THEN
+	            #TMR[1] := #TMR[1] + #pCycle;
+	            IF TIME_TO_DINT(#TMR[1]) > TIME_TO_DINT(#pTd) THEN
+	                #sMotDirCnhg := false;
+	            END_IF;
+	        ELSE
+	            #TMR[1] := #pCycle;
+	        END_IF;
+	        //the  motor is stopping while a time
+	        IF #sMotStop THEN
+	            #TMR[2] := #TMR[2] + #pCycle;
+	            IF TIME_TO_DINT(#TMR[2]) > TIME_TO_DINT(#pTs) THEN
+	                #sMotStop := false;
+	            END_IF;
+	        ELSE
+	            #TMR[2] := #pCycle;
+	        END_IF;
+	        // the motor is running too long time
+	        IF (#tOnUp OR #tOnDown) AND #tRun THEN
+	            #TMR[3] := #TMR[3] + #pCycle;
+	            IF TIME_TO_DINT(#TMR[3]) > TIME_TO_DINT(#pTr) THEN
+	                #sMotRunOut := TRUE;
+	            END_IF;
+	        ELSE
+	            #TMR[3] := #pCycle;
+	        END_IF;
+	    END_REGION
+	END_REGION
+	
+	REGION outputs    
+	    #qUest := LREAL_TO_REAL(#sYhat[0]) + #pUmin;
+	    
+	    #qSpdSet := #tMnl;
+	    #qOnInc := #tOnUp;
+	    #qOnDec := #tOnDown;
+	
+	    #qReached := #sReached AND #iMeasOn AND NOT #tRun;
+	END_REGION
+	
+	
+END_FUNCTION_BLOCK
+
